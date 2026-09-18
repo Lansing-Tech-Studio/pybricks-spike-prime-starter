@@ -53,6 +53,15 @@ FORCE_SENSOR_PORT = None  # the push-button touch sensor
 # You almost always want this on.
 USE_GYRO = True
 
+# --- Menu animation ---
+# What the hub's screen shows while a mission is running from the menu.
+#   "left", "right", "top", "bottom"  - a light slides back and forth
+#                                       along that edge of the screen
+#   "clockwise", "counterclockwise"   - a light runs around the outside
+#                                       edge of the screen
+#   None                              - screen stays dark
+RUNNING_ANIMATION = "left"
+
 # ============================================================
 #  END OF EDIT SECTION — you shouldn't need to change below here
 # ============================================================

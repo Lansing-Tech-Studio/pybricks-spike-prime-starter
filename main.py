@@ -125,12 +125,18 @@ if needs_robot:
     from robot import Robot
     robot = Robot()
 
+# The "running" animation is picked in robot.py. Importing robot.py just
+# reads its settings; it doesn't build Robot() or claim any ports.
+# (getattr keeps older robot.py files without the setting working.)
+import robot as robot_settings
+animation = getattr(robot_settings, "RUNNING_ANIMATION", "left")
+
 # If we have a robot, hand it to every mission; otherwise the menu passes
 # the hub instead (block/whole-program runners ignore the argument anyway).
 if robot is not None:
-    menu = Menu(robot.hub, context=robot)
+    menu = Menu(robot.hub, context=robot, running_animation=animation)
 else:
-    menu = Menu()
+    menu = Menu(running_animation=animation)
 
 # Turn each slot from menu_config.py into a menu item. If one slot is broken
 # (a bad display number, a missing "module"...), we skip just that one and
