@@ -225,7 +225,10 @@ A couple of things are different about block files:
   and so on). That's built into the blocks at the top of the program.
 - **Two ways to put a block file in the menu:**
   - As a **whole-program** slot (kind 2 above, no `"function"`) — picking
-    it runs the entire block program from top to bottom.
+    it runs the entire block program from top to bottom. On the hub a
+    whole program runs **once each time you start `main.py`** — to run it
+    again, stop and restart the program. (A `"function"` slot can run
+    again and again.)
   - As a **My Block** slot (kind 3, `"blocks": True`) — this calls one
     named My Block out of a file whose top level is _setup only_ (it sets
     up devices but has no main program blocks of its own).

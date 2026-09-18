@@ -53,7 +53,7 @@ Three item kinds:
 ### `main.py` — thin loader over `menu_config.py`
 No longer hand-registers missions. It reads `MENU_ITEMS`, builds a `Menu`, and wraps each entry in a runner:
 
-- `_import_fresh(name)`: `del sys.modules[name]` (guarded) before `__import__`, so **whole-program items are re-runnable** — including after a CENTER interrupt leaves a partially-executed module cached. Whole-program items import fresh on every run.
+- `_import_fresh(name)`: on desktop Python it drops `sys.modules[name]` before `__import__` so the file re-runs. **On the hub there is no `sys.modules`**, so a whole-program item runs **once per start of `main.py`**; later picks print "already ran" (tracked in `_ran_once`, set only after the import finishes, so a CENTER-interrupted run can be retried). Repeatable missions should use a `"function"` slot.
 - Function items (kinds 1 and 3) **import once and stay cached** — the module's top-level device setup runs a single time, not per menu press.
 - `_make_runner(item)` dispatches the three call shapes above.
 - **Lazy `Robot()`**: the shared `Robot` is only constructed if some enabled item is a plain (non-blocks) function item. An **all-blocks** menu never constructs `Robot()`, so it never claims ports via `robot.py` defaults (block modules bring their own setup).
@@ -94,8 +94,9 @@ CPython-only (does **not** run on the hub). `py_compile`s every `.py`; `ast`-par
 
 ## Pybricks/MicroPython gotchas
 
-- **`del sys.modules[name]` re-import idiom is unverified on Pybricks firmware.** `main.py` uses it so whole-program items re-run on each menu press; if it misbehaves on-hub the fallback is "whole-program items run once per boot" (or an `exec`-based loader). **Verify on real hardware** when touching the loader.
-- **`usys`/`sys` fallback**: import `usys` and fall back to `sys` — Pybricks exposes the module under both names across firmware versions. `main.py`'s `del sys.modules` lookup must use whichever resolved.
+- **Pybricks `usys` has no `modules`** (verified on a SPIKE Prime hub: `AttributeError: 'module' object has no attribute 'modules'`). There is no way to clear the import cache on-hub, and no filesystem for an `exec`-based loader, so whole-program items run once per start. Always reach it via `getattr(sys, "modules", None)`.
+- **`usys`/`sys` fallback**: import `usys` and fall back to `sys` — Pybricks exposes the module under both names across firmware versions.
+- **`if __name__ == "__main__":` never runs from the menu** — the menu imports the file, so `__name__` is the module name. A file like `dance_party.py` whose only runnable code is under that guard must be a `"function"` slot (e.g. `"function": "run"`), not a whole-program slot.
 - **Coroutine detection is `hasattr(result, "send")`** — how a `blocks: True` My Block's return value is recognized as async on MicroPython (no `inspect.iscoroutine`). Drive it with `run_task`.
 - **Double device construction**: if a block module and `Robot()` both claim the same ports in one session, the port is initialized twice. Mitigated by the lazy `Robot()` (an all-blocks menu never builds one); the full fix arrives with the extension's phase-4 setup-splice. Document, don't fight it, for now.
 

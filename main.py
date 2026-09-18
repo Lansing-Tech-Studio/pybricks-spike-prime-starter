@@ -26,16 +26,31 @@ from menu import Menu
 from menu_config import MENU_ITEMS
 
 
-def _import_fresh(name):
-    """Import a module by name, running it fresh from the top every time.
+# Whole programs that already ran since the hub started this program.
+_ran_once = set()
 
-    We forget any cached copy FIRST, then import. That way a whole-program
-    item runs again the next time you pick it — even if a CENTER stop left
-    a half-imported copy of the file behind.
+
+def _import_fresh(name):
+    """Import a module by name, running it from the top.
+
+    Importing a file runs it, but only the FIRST time: after that the hub
+    remembers it and skips it. Desktop Python lets us forget the cached copy
+    (sys.modules) so it runs again every time. The hub's Pybricks firmware
+    has no sys.modules, so there a whole program runs once per start —
+    restart main.py to run it again. (Use a "function" slot instead if you
+    want a mission you can run over and over.)
     """
-    if name in sys.modules:
-        del sys.modules[name]
+    modules = getattr(sys, "modules", None)
+    if modules is not None:
+        if name in modules:
+            del modules[name]
+    elif name in _ran_once:
+        print(name, "already ran. Restart the program to run it again.")
+        return
     __import__(name)
+    # Only mark it after it finished: if CENTER stopped it partway, the next
+    # pick at least tries again.
+    _ran_once.add(name)
 
 
 def _make_runner(item):
