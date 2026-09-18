@@ -6,7 +6,7 @@ except ImportError:
 from pybricks.hubs import PrimeHub
 from pybricks.parameters import Button
 from pybricks.tools import wait
-from pybricks.parameters import Color, Icon
+from pybricks.parameters import Color
 import pix_display
 
 
@@ -110,8 +110,9 @@ class Menu:
         current_item = self.get_current_item()
         if current_item and current_item["function"]:
             try:
-                # Show a brief confirmation that function is executing
-                self.hub.display.icon(Icon.TRUE)
+                # Show a scanning light while the function is executing. It
+                # runs in the background and stops when the menu redraws.
+                pix_display.start_scanner(self.hub)
 
                 # Wait for CENTER release before making it the stop button
                 self._wait_for_release(Button.CENTER)

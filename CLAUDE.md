@@ -77,6 +77,7 @@ Helpers for drawing on the hub's 5×5 display.
 - `display_pattern(hub, pattern)`: `pattern` is exactly 5 strings of length 5. `' '` or `'0'` = off; digits `'1'`–`'9'` = brightness × 10; anything else = 100.
 - `display_number(hub, n)` for 0–99: 0–9 use the built-in single-char glyph, 10–19 use hand-drawn patterns from `Patterns.numbers`, 20+ use the built-in scrolling number renderer.
 - `Patterns.numbers` only goes up to index 19 — do not index past it.
+- `start_scanner(hub)`: "Knight Rider" light sweeping up and down the left column, via `hub.display.animate` (runs in the background; any later display call stops it). `Menu` shows it while an item runs.
 
 ### `.pybricks-git.json` — repo manifest read by the extension
 Repo-root JSON, read by the Pybricks Git extension **from the git tree**, never synced into the editor (the extension's `.py`-only filter keeps it out; it's protected so it can't be clobbered). `schemaVersion` gates parsing; unknown keys are ignored. Keys: `menuConfig` (`menu_config.py`), `setupTemplate` (`robot_setup_template.py`), `teamSetup` (`robot_setup.py`), and `protected` — a list of framework paths. **Protected** means: on commit the extension keeps the git tree's version and drops the editor's edits (reporting a skip), and on pull it restores those files — a git-layer guard only, no in-editor enforcement. `robot.py`, `menu_config.py`, sample missions, and the team's `robot_setup.py` are intentionally NOT protected.
