@@ -85,8 +85,27 @@ def _make_runner(item):
     # Plain mission → call function(robot), the usual way missions work.
     def run_plain(robot):
         module = __import__(module_name)
-        getattr(module, func_name)(robot)
+        try:
+            getattr(module, func_name)(robot)
+        finally:
+            # Runs whether the mission finished or CENTER stopped it.
+            _stop_robot(robot)
     return run_plain
+
+
+def _stop_robot(robot):
+    """Let go of the wheels and attachment motors after a mission.
+
+    Pybricks moves end by HOLDing: the motors keep pushing to stay where they
+    stopped (and with the gyro on, to keep facing the same way). A program
+    run on its own stops everything when it ends, but the menu keeps running,
+    so without this the robot would fight you if you picked it up and turned
+    it between missions.
+    """
+    robot.drive_base.stop()
+    for motor in (robot.attachment_1, robot.attachment_2):
+        if motor is not None:
+            motor.stop()
 
 
 # Does any slot need the robot? Only plain missions do. Block programs and
