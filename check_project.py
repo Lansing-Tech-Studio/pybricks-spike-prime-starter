@@ -110,6 +110,77 @@ def _describe_body_statement(node):
     return type(node).__name__
 
 
+def _is_bundle_hints_assign(node):
+    """Is this the `_BUNDLE_HINTS = False` line the bundle-hint block needs?"""
+    return (
+        isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "_BUNDLE_HINTS"
+    )
+
+
+def _is_bundle_hints_if(node):
+    """Is this the `if _BUNDLE_HINTS:` block that lists the import hints?"""
+    return (
+        isinstance(node, ast.If)
+        and isinstance(node.test, ast.Name)
+        and node.test.id == "_BUNDLE_HINTS"
+    )
+
+
+def _strip_bundle_hints(body):
+    """Drop the bundle-hint block from the top of menu_config.py's body.
+
+    The block looks like this, and exists so the uploader sees a real
+    `import` line for every mission module (it never actually runs):
+
+        _BUNDLE_HINTS = False
+        if _BUNDLE_HINTS:
+            import mission_01_go_out_and_turn
+
+    Returns the remaining statements, or None if the block is malformed
+    (a problem has already been reported in that case).
+    """
+    saw_assign = False
+
+    if body and _is_bundle_hints_assign(body[0]):
+        if not isinstance(body[0].value, ast.Constant):
+            problem(
+                "menu_config.py's _BUNDLE_HINTS must be set to a plain "
+                "False (it is only there to switch the import hints off)."
+            )
+            return None
+        saw_assign = True
+        body = body[1:]
+
+    if body and _is_bundle_hints_if(body[0]):
+        if not saw_assign:
+            problem(
+                "menu_config.py has an `if _BUNDLE_HINTS:` block but never "
+                "sets _BUNDLE_HINTS = False above it, so importing the file "
+                "would fail. Add that line back."
+            )
+            return None
+        if body[0].orelse:
+            problem(
+                "menu_config.py's `if _BUNDLE_HINTS:` block must not have an "
+                "else - it should only hold `import` lines."
+            )
+            return None
+        for stmt in body[0].body:
+            if not isinstance(stmt, ast.Import):
+                problem(
+                    "menu_config.py's `if _BUNDLE_HINTS:` block may only "
+                    "contain plain `import <module>` lines, but it has a %s "
+                    "statement." % _describe_body_statement(stmt)
+                )
+                return None
+        body = body[1:]
+
+    return body
+
+
 def _menu_items_node(module):
     """Return (assign_node, value_node) for the single MENU_ITEMS assignment,
     or (None, None) with problems already reported for anything unexpected."""
@@ -121,10 +192,16 @@ def _menu_items_node(module):
     ) and isinstance(body[0].value.value, str):
         body = body[1:]
 
+    # The optional bundle-hint block is allowed too, and ignored.
+    body = _strip_bundle_hints(body)
+    if body is None:
+        return None, None
+
     if len(body) != 1:
         problem(
             "menu_config.py must contain exactly one statement: "
-            "MENU_ITEMS = [ ... ] (optionally preceded by a docstring). "
+            "MENU_ITEMS = [ ... ] (optionally preceded by a docstring and "
+            "the _BUNDLE_HINTS import block). "
             "Found %d top-level statements." % len(body)
         )
         return None, None

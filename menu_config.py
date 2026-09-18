@@ -28,6 +28,24 @@ lines INSIDE the MENU_ITEMS list below — the extension replaces everything
 else, so any comments you add inside the list may not be kept.
 """
 
+# ---------------------------------------------------------------------
+# Bundle hints — one `import` line per mission file listed below.
+#
+# These imports NEVER run: _BUNDLE_HINTS is False, so the whole block is
+# skipped. They are here because your programs are sent to the hub over
+# Bluetooth, and the uploader only sends a file if it sees a real
+# `import` line for it somewhere. The menu finds your missions by NAME
+# (the "module" text below), which the uploader can't see — so without
+# these lines the hub would say "no module named ..." when you press
+# CENTER.
+#
+# Add a matching `import` line here whenever you add a mission below.
+# ---------------------------------------------------------------------
+_BUNDLE_HINTS = False
+if _BUNDLE_HINTS:
+    import mission_01_go_out_and_turn
+    import mission_02_come_back_home
+
 MENU_ITEMS = [
     {"display": 1, "module": "mission_01_go_out_and_turn", "function": "run"},
     {"display": 2, "module": "mission_02_come_back_home", "function": "run"},

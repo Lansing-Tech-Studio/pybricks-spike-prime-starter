@@ -26,7 +26,7 @@ The only file teams edit when their robot's build changes. An "EDIT THIS SECTION
 Every mission has the same shape: a module docstring, `def run(robot):` with the moves, and an `if __name__ == "__main__": run(Robot())` block so it is standalone-runnable (open the file, press F5). The `NN` in the filename matches the `display` given in `menu_config.py` — the number shown on the hub's display. `mission_template.py` is the copy-me skeleton and is intentionally not listed in the menu.
 
 ### `menu_config.py` — the menu contract (team-owned; extension-regenerated)
-The single source of truth for what appears in the hub menu. File = optional docstring/comments + exactly one top-level `MENU_ITEMS = [<dict literals>]`. Values are limited to int/str/bool/None/list-of-str so it is machine-parseable (`ast.literal_eval` semantics) — the Pybricks Git extension's menu-manager rewrites the whole file from its own template in a later phase, so **comments inside the `MENU_ITEMS` list are not preserved**. Per-slot schema:
+The single source of truth for what appears in the hub menu. File = optional docstring/comments + an optional **bundle-hint block** + exactly one top-level `MENU_ITEMS = [<dict literals>]`. Values are limited to int/str/bool/None/list-of-str so it is machine-parseable (`ast.literal_eval` semantics) — the Pybricks Git extension's menu-manager rewrites the whole file from its own template in a later phase, so **comments inside the `MENU_ITEMS` list are not preserved**. Per-slot schema:
 
 - `display` (required): int `0`–`99`, single-char str, or list of exactly 5 pattern strings (same semantics as `pix_display`).
 - `module` (required): bare module name, no `.py`, no dots.
@@ -34,6 +34,16 @@ The single source of truth for what appears in the hub menu. File = optional doc
 - `blocks` (optional, default `False`): the function is a My Block from a block file.
 - `enabled` (optional, default `True`): disabled items are skipped at load but kept in the file.
 - List order = menu order.
+
+**Bundle hints (required for every listed module).** `main.py` reaches missions via `__import__(name)` with a *string* from `MENU_ITEMS`, and both `pybricksdev` bundlers resolve dependencies statically (v1.1: CPython `modulefinder`; v2.x: `IMPORT_NAME` opcodes via mpy-tool), as does code.pybricks.com. A module named only as a string is never uploaded → `ImportError: no module named ...` on CENTER. So `menu_config.py` carries, between the docstring and `MENU_ITEMS`:
+
+```python
+_BUNDLE_HINTS = False
+if _BUNDLE_HINTS:
+    import mission_01_go_out_and_turn
+```
+
+The guard **must** be a runtime name lookup — `if False:`/`if 0:` is folded away by both the CPython peephole optimizer and mpy-cross, emitting no `IMPORT_NAME` and bundling nothing. Imports stay guarded (never bare) because importing a whole-program item *runs* it and a `blocks: True` module runs its device setup. The extension's menu-manager must emit this block when it regenerates the file; older versions drop it.
 
 Three item kinds:
 1. **Plain function item** — `function` set, `blocks` absent/False. Called as `fn(robot)` (the existing convention).
@@ -80,7 +90,7 @@ A block program authored at code.pybricks.com is saved as a `.py` file whose **l
 - **`robot_setup_template.py` must only ever be authored via code.pybricks.com** — line-1 JSON and the generated Python must stay in sync, which hand-editing breaks.
 
 ## `check_project.py` — desktop verifier
-CPython-only (does **not** run on the hub). `py_compile`s every `.py`; `ast`-parses `menu_config.py` (docstring + a single `MENU_ITEMS` literal assignment, full schema validation, every referenced module file exists); validates `.pybricks-git.json` (schema + listed files exist); validates setup files (line-1 sentinel present, JSON parses, has `blockGlobalSetup`, no `run_task`). Run it before committing: `python3 check_project.py`.
+CPython-only (does **not** run on the hub). `py_compile`s every `.py`; `ast`-parses `menu_config.py` (docstring + optional `_BUNDLE_HINTS` block + a single `MENU_ITEMS` literal assignment, full schema validation, every referenced module file exists; the hint block is skipped by `_strip_bundle_hints`, which still rejects anything but plain `import` lines inside the guard); validates `.pybricks-git.json` (schema + listed files exist); validates setup files (line-1 sentinel present, JSON parses, has `blockGlobalSetup`, no `run_task`). Run it before committing: `python3 check_project.py`.
 
 ## Pybricks/MicroPython gotchas
 
