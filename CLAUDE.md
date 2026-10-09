@@ -53,7 +53,7 @@ Three item kinds:
 ### `main.py` — thin loader over `menu_config.py`
 No longer hand-registers missions. It reads `MENU_ITEMS`, builds a `Menu`, and wraps each entry in a runner:
 
-- `_import_fresh(name)`: on desktop Python it drops `sys.modules[name]` before `__import__` so the file re-runs. **On the hub there is no `sys.modules`**, so a whole-program item runs **once per start of `main.py`**; later picks print "already ran" (tracked in `_ran_once`, set only after the import finishes, so a CENTER-interrupted run can be retried). Repeatable missions should use a `"function"` slot.
+- `_import_fresh(name)`: on desktop Python it drops `sys.modules[name]` before `__import__` so the file re-runs. **On the hub there is no `sys.modules`**, so a whole-program item runs **once per start of `main.py`**; a later pick of one that finished (tracked in `_ran_once`, set only after the import finishes, so a CENTER-interrupted run can be retried) calls `_restart_on_this_slot`: it writes slot+1 to `hub.system.storage` byte 0 and sets `menu.stop_requested`, so `Menu.run` returns and `main.py` ends. The user presses CENTER to restart; `_saved_slot()` reads and clears the byte and the menu opens **on** that slot (never auto-runs it — storage survives power-off). Firmware without `storage` falls back to printing "already ran".
 - Function items (kinds 1 and 3) **import once and stay cached** — the module's top-level device setup runs a single time, not per menu press.
 - `_make_runner(item)` dispatches the three call shapes above.
 - **Plain function items release the robot afterwards** (`_stop_robot`, in a `finally`, so it also runs on a CENTER interrupt): `drive_base.stop()` plus `stop()` on any attachment motor. Pybricks moves default to `then=Stop.HOLD`, and because `main.py` keeps running, the shared `Robot` would otherwise keep holding position — with the gyro on, the robot turns back to its last heading if picked up and rotated between missions. Whole-program and My Block items own their devices, so this can't reach them.
@@ -98,7 +98,7 @@ CPython-only (does **not** run on the hub). `py_compile`s every `.py`; `ast`-par
 
 ## Pybricks/MicroPython gotchas
 
-- **Pybricks `usys` has no `modules`** (verified on a SPIKE Prime hub: `AttributeError: 'module' object has no attribute 'modules'`). There is no way to clear the import cache on-hub, and no filesystem for an `exec`-based loader, so whole-program items run once per start. Always reach it via `getattr(sys, "modules", None)`.
+- **Pybricks `usys` has no `modules`** (verified on a SPIKE Prime hub: `AttributeError: 'module' object has no attribute 'modules'`). There is no way to clear the import cache on-hub, and no filesystem for an `exec`-based loader, so whole-program items run once per start (a repeat pick restarts `main.py` on that slot via hub storage). Always reach it via `getattr(sys, "modules", None)`.
 - **`usys`/`sys` fallback**: import `usys` and fall back to `sys` — Pybricks exposes the module under both names across firmware versions.
 - **`if __name__ == "__main__":` never runs from the menu** — the menu imports the file, so `__name__` is the module name. A file like `dance_party.py` whose only runnable code is under that guard must be a `"function"` slot (e.g. `"function": "run"`), not a whole-program slot.
 - **Coroutine detection is `hasattr(result, "send")`** — how a `blocks: True` My Block's return value is recognized as async on MicroPython (no `inspect.iscoroutine`). Drive it with `run_task`.

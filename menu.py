@@ -50,6 +50,8 @@ class Menu:
         self.running_animation = running_animation
         self.menu_items = []
         self.current_index = 0
+        # A menu item sets this to True to end the menu after it returns.
+        self.stop_requested = False
 
     def add_item(self, display: Union[int, str, list[str]], function):
         """
@@ -204,6 +206,9 @@ class Menu:
                 elif Button.CENTER in pressed_buttons:
                     self._execute_current_function(auto_increment)
                     self._wait_for_release(Button.CENTER)
+                    if self.stop_requested:
+                        self.hub.display.off()
+                        return True
 
                 elif Button.BLUETOOTH in pressed_buttons:
                     # Exit the menu

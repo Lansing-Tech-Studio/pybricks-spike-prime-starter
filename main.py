@@ -36,21 +36,54 @@ def _import_fresh(name):
     Importing a file runs it, but only the FIRST time: after that the hub
     remembers it and skips it. Desktop Python lets us forget the cached copy
     (sys.modules) so it runs again every time. The hub's Pybricks firmware
-    has no sys.modules, so there a whole program runs once per start —
-    restart main.py to run it again. (Use a "function" slot instead if you
-    want a mission you can run over and over.)
+    has no sys.modules, so there a whole program runs once per start. Picking
+    it again ends main.py, remembering this slot: press CENTER to start the
+    menu again on this slot, then CENTER once more to run it.
     """
     modules = getattr(sys, "modules", None)
     if modules is not None:
         if name in modules:
             del modules[name]
     elif name in _ran_once:
-        print(name, "already ran. Restart the program to run it again.")
+        _restart_on_this_slot(name)
         return
     __import__(name)
     # Only mark it after it finished: if CENTER stopped it partway, the next
     # pick at least tries again.
     _ran_once.add(name)
+
+
+def _restart_on_this_slot(name):
+    """End main.py, and make the next start open the menu on this slot.
+
+    The slot number is kept in the hub's storage, which survives the program
+    ending. Storage byte 0 holds the slot + 1 (0 means "no saved slot").
+    """
+    try:
+        menu.hub.system.storage(0, write=bytes([menu.current_index + 1]))
+    except Exception:
+        # Older firmware has no storage: fall back to just saying so.
+        print(name, "already ran. Restart the program to run it again.")
+        return
+    print(name, "already ran. Press CENTER to restart the menu on this slot.")
+    menu.stop_requested = True
+
+
+def _saved_slot():
+    """Read and clear the slot saved by _restart_on_this_slot, or None.
+
+    Clearing it means a later start (even after a power-off) begins at
+    slot 1 as usual, and the saved slot is only shown, never run by itself.
+    """
+    try:
+        saved = menu.hub.system.storage(0, read=1)[0]
+        if saved:
+            menu.hub.system.storage(0, write=bytes([0]))
+    except Exception:
+        return None
+    if 0 < saved <= len(menu):
+        return saved - 1
+    return None
 
 
 def _make_runner(item):
@@ -154,5 +187,10 @@ for item in MENU_ITEMS:
 # No slots made it in? The menu shows "?" on its own; give a hint too.
 if registered == 0:
     print("No missions to show yet. Add one in menu_config.py!")
+
+# Restarted to re-run a whole program? Open the menu on that slot.
+slot = _saved_slot()
+if slot is not None:
+    menu.current_index = slot
 
 menu.run(auto_increment=True)
