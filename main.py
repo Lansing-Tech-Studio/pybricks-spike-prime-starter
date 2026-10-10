@@ -20,40 +20,124 @@ try:
 except ImportError:
     import sys
 
+from pybricks.pupdevices import DCMotor, Motor
 from pybricks.tools import run_task
 
 from menu import Menu
 from menu_config import MENU_ITEMS
 
+# The error number Pybricks uses for "EBUSY: Device or resource busy". You
+# get it when you set up a Motor on a port that already has one.
+_EBUSY = 16
 
-# Whole programs that already ran since the hub started this program.
-_ran_once = set()
+# Programs that can't run again until main.py restarts: whole programs that
+# already ran, and block programs whose motors we had to close.
+_used_up = set()
+
+# Who has motors set up right now: the shared Robot, a block program's
+# module, or None. Only one can hold a port at a time.
+_motor_owner = None
+
+# The shared Robot for plain missions. Built the first time one is picked.
+_robot = None
+
+
+def _release_motors():
+    """Close the motors of whatever ran last, so the next program can use
+    those ports.
+
+    A port can only have one Motor at a time. The program that ran last is
+    still loaded, so its motors keep their ports until we close them.
+    """
+    global _motor_owner
+    owner = _motor_owner
+    if owner is None:
+        return
+    _motor_owner = None
+    for name in dir(owner):
+        thing = getattr(owner, name, None)
+        if isinstance(thing, (Motor, DCMotor)) and hasattr(thing, "close"):
+            try:
+                thing.close()
+            except Exception:
+                pass
+    # A block program sets up its motors only when it's first imported, so
+    # it can't get them back without a restart. (The Robot just gets rebuilt.)
+    if owner is not _robot:
+        _used_up.add(owner.__name__)
+
+
+def _is_busy(error):
+    """True if this error means a motor port is already in use."""
+    return isinstance(error, OSError) and error.args and error.args[0] == _EBUSY
 
 
 def _import_fresh(name):
-    """Import a module by name, running it from the top.
+    """Import a module by name, running it from the top. Returns the module.
 
     Importing a file runs it, but only the FIRST time: after that the hub
     remembers it and skips it. Desktop Python lets us forget the cached copy
     (sys.modules) so it runs again every time. The hub's Pybricks firmware
-    has no sys.modules, so there a whole program runs once per start. Picking
-    it again ends main.py, remembering this slot: press CENTER to start the
-    menu again on this slot, then CENTER once more to run it.
+    has no sys.modules, so there a whole program runs once per start.
     """
     modules = getattr(sys, "modules", None)
     if modules is not None:
         if name in modules:
             del modules[name]
-    elif name in _ran_once:
-        _restart_on_this_slot(name)
-        return
-    __import__(name)
+    return __import__(name)
+
+
+def _set_up_module(name, whole_program):
+    """Import a block program (or whole program), which sets up its motors.
+
+    Returns the module, or None if main.py has to restart first. Restarting
+    is the only way to get a used-up program or a stuck port back: picking
+    it ends main.py, remembering this slot. Press CENTER to start the menu
+    again on this slot, then CENTER once more to run it.
+    """
+    global _motor_owner
+    if name in _used_up:
+        _restart_on_this_slot(name + " already ran.")
+        return None
+    _release_motors()
+    try:
+        module = _import_fresh(name)
+    except Exception as e:
+        if not _is_busy(e):
+            raise
+        # A program stopped partway can leave motors we can't find to close.
+        _restart_on_this_slot("A motor port is still in use.")
+        return None
+    _motor_owner = module
     # Only mark it after it finished: if CENTER stopped it partway, the next
     # pick at least tries again.
-    _ran_once.add(name)
+    if whole_program and getattr(sys, "modules", None) is None:
+        _used_up.add(name)
+    return module
 
 
-def _restart_on_this_slot(name):
+def _get_robot():
+    """Return the shared Robot, building it if another program has the ports.
+
+    Returns None if main.py has to restart first (see _set_up_module).
+    """
+    global _robot, _motor_owner
+    if _robot is not None and _motor_owner is _robot:
+        return _robot
+    _release_motors()
+    from robot import Robot
+    try:
+        _robot = Robot()
+    except Exception as e:
+        if not _is_busy(e):
+            raise
+        _restart_on_this_slot("A motor port is still in use.")
+        return None
+    _motor_owner = _robot
+    return _robot
+
+
+def _restart_on_this_slot(why):
     """End main.py, and make the next start open the menu on this slot.
 
     The slot number is kept in the hub's storage, which survives the program
@@ -63,9 +147,9 @@ def _restart_on_this_slot(name):
         menu.hub.system.storage(0, write=bytes([menu.current_index + 1]))
     except Exception:
         # Older firmware has no storage: fall back to just saying so.
-        print(name, "already ran. Restart the program to run it again.")
+        print(why, "Restart the program to run it.")
         return
-    print(name, "already ran. Press CENTER to restart the menu on this slot.")
+    print(why, "Press CENTER to restart the menu on this slot.")
     menu.stop_requested = True
 
 
@@ -98,16 +182,20 @@ def _make_runner(item):
     module_name = item["module"]
     func_name = item.get("function")
 
-    # No "function" key → whole program. Picking it re-runs the whole file.
+    # No "function" key → whole program. Importing it runs the whole file.
     if not func_name:
         def run_whole(_arg):
-            _import_fresh(module_name)
+            _set_up_module(module_name, True)
         return run_whole
 
     # "blocks": True → a My Block. It takes no robot; it may be async.
     if item.get("blocks"):
         def run_block(_arg):
-            module = __import__(module_name)
+            module = _motor_owner
+            if module is None or getattr(module, "__name__", None) != module_name:
+                module = _set_up_module(module_name, False)
+                if module is None:
+                    return
             result = getattr(module, func_name)()
             # An async block returns a coroutine (it has a .send method).
             # run_task actually runs it; a plain block already finished.
@@ -116,7 +204,10 @@ def _make_runner(item):
         return run_block
 
     # Plain mission → call function(robot), the usual way missions work.
-    def run_plain(robot):
+    def run_plain(_arg):
+        robot = _get_robot()
+        if robot is None:
+            return
         module = __import__(module_name)
         try:
             getattr(module, func_name)(robot)
@@ -141,35 +232,16 @@ def _stop_robot(robot):
             motor.stop()
 
 
-# Does any slot need the robot? Only plain missions do. Block programs and
-# whole-program items set up their own devices, so an all-blocks team should
-# never build Robot() (that would claim ports they aren't using).
-needs_robot = False
-for item in MENU_ITEMS:
-    if not item.get("enabled", True):
-        continue
-    if item.get("function") and not item.get("blocks"):
-        needs_robot = True
-        break
-
-# Only build the robot if something actually needs it.
-robot = None
-if needs_robot:
-    from robot import Robot
-    robot = Robot()
-
 # The "running" animation is picked in robot.py. Importing robot.py just
 # reads its settings; it doesn't build Robot() or claim any ports.
 # (getattr keeps older robot.py files without the setting working.)
 import robot as robot_settings
 animation = getattr(robot_settings, "RUNNING_ANIMATION", "left")
 
-# If we have a robot, hand it to every mission; otherwise the menu passes
-# the hub instead (block/whole-program runners ignore the argument anyway).
-if robot is not None:
-    menu = Menu(robot.hub, context=robot, running_animation=animation)
-else:
-    menu = Menu(running_animation=animation)
+# The Robot (and its motors) is only built when a plain mission is picked,
+# so block programs that set up their own motors aren't fighting it for
+# ports. Each runner finds what it needs itself, so no context is passed.
+menu = Menu(running_animation=animation)
 
 # Turn each slot from menu_config.py into a menu item. If one slot is broken
 # (a bad display number, a missing "module"...), we skip just that one and
@@ -188,7 +260,7 @@ for item in MENU_ITEMS:
 if registered == 0:
     print("No missions to show yet. Add one in menu_config.py!")
 
-# Restarted to re-run a whole program? Open the menu on that slot.
+# Restarted to re-run a program? Open the menu on that slot.
 slot = _saved_slot()
 if slot is not None:
     menu.current_index = slot
