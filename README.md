@@ -109,6 +109,42 @@ After a mission finishes, the menu automatically moves to the next
 number — so in a match you can run your missions in order by just
 pressing CENTER each time.
 
+**Need the same mission again?** Press LEFT to go back to its number and
+CENTER to run it. That works for every kind of mission, as many times as
+you like.
+
+**If the number blinks and the menu closes:** this only happens with block
+programs, when you run one block program, then a *different* one, then the
+first one again. The hub has to restart the menu to do that. The number
+blinks twice, the menu closes, and the hub shows its own slot number.
+**Press CENTER once** — the menu comes back and runs your mission right
+away, then moves on to the next number like normal.
+
+> If the hub gets turned off during that blink-and-restart moment, the
+> next time you start `main.py` from the hub's buttons it will run that
+> mission straight away, once. Starting it from the computer never does.
+
+#### Hub program slots (Pybricks 4.0 and newer)
+
+The hub itself can hold **5 programs**. When no program is running, the
+hub shows the slot number, and LEFT / RIGHT pick a slot while CENTER runs
+it. Whatever program you upload goes into the slot that is showing at the
+time, so **pick the slot before you upload**.
+
+| Hub slot | Suggested use                                                   |
+| -------- | --------------------------------------------------------------- |
+| 1        | `main.py` — the mission menu, with every mission in it          |
+| 2–5      | (optional) one block program each, for missions you re-run a lot |
+
+A block program in its own hub slot can be run with just CENTER, again and
+again, no menu needed. Note that a block program in slot 2 does **not** have
+to be slot 2 in the menu, as the two are unrelated.
+
+How to tell the hub's slot number from the menu's number: the menu's
+numbers follow `menu_config.py` and show an animation while a mission
+runs; the hub's own slot number only goes from 1 to 5 and shows a small
+animated square while a program runs.
+
 **What shows up in the menu lives in `menu_config.py`** — one line per
 slot, in the order they appear. `main.py` just reads that list and builds
 the menu for you, so you never have to edit `main.py`. The Pybricks Git extension provides a menu editor.
@@ -225,10 +261,12 @@ A couple of things are different about block files:
   and so on). That's built into the blocks at the top of the program.
 - **Two ways to put a block file in the menu:**
   - As a **whole-program** slot (kind 2 above, no `"function"`) — picking
-    it runs the entire block program from top to bottom. On the hub a
-    whole program runs **once each time you start `main.py`** — to run it
-    again, stop and restart the program. (A `"function"` slot can run
-    again and again.)
+    it runs the entire block program from top to bottom. Picking it again
+    runs it again. The only time the menu has to restart is when a
+    *different* block program ran in between (see
+    ["If the number blinks"](#5-the-mission-menu-mainpy) above). A plain
+    Python file in a whole-program slot (one with no `main` function) runs
+    once per start of `main.py`; give it a `"function"` instead.
   - As a **My Block** slot (kind 3, `"blocks": True`) — this calls one
     named My Block out of a file whose top level is _setup only_ (it sets
     up devices but has no main program blocks of its own).
@@ -294,6 +332,9 @@ and you're good to go.
   tires are the same size and clean.
 - **Turns are off by a few degrees** — Keep the robot perfectly still
   for a second after the program starts so the gyro can settle.
+- **The menu number blinked and the menu closed** — Press CENTER once.
+  The menu restarts and runs that mission right away. See
+  ["If the number blinks"](#5-the-mission-menu-mainpy).
 - **`ImportError: no module named 'typing'`** — Your code runs on the
   hub, which doesn't have Python's full standard library. Only import
   from `pybricks.*` (see `menu.py` for the safe way to use typing).

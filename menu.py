@@ -134,8 +134,10 @@ class Menu:
                 argument = self.context if self.context is not None else self.hub
                 current_item["function"](argument)
 
-                # Return to displaying the current number
-                if auto_increment:
+                # Return to displaying the current number. If the item asked
+                # the menu to stop, stay on this slot so the number that
+                # blinks on the way out is the one that will run next.
+                if auto_increment and not self.stop_requested:
                     self._navigate_right()
                 self._display_current_item()
 
@@ -158,13 +160,28 @@ class Menu:
                 # Restore stop button to BLUETOOTH for the menu
                 self.hub.system.set_stop_button(Button.BLUETOOTH)
 
-    def run(self, show_startup=False, auto_increment=False):
+    def _blink_goodbye(self):
+        """Blink the current number twice, then turn the display off.
+
+        Shown when a menu item asked the menu to stop: it tells the user the
+        hub heard them, and which slot the restarted menu will run.
+        """
+        for _ in range(2):
+            self.hub.display.off()
+            wait(150)
+            self._display_current_item()
+            wait(150)
+        self.hub.display.off()
+
+    def run(self, show_startup=False, auto_increment=False, run_now=False):
         """
         Run the menu system. This is the main loop that handles user input.
 
         Args:
             show_startup: If True, shows a startup indicator before beginning.
             auto_increment: If True, Automatically moves to the next program.
+            run_now: If True, runs the current item once right away, as if
+                CENTER had been pressed, before waiting for buttons.
 
         Returns:
             bool: True if menu exited normally, False if no menu items exist.
@@ -191,6 +208,12 @@ class Menu:
         # Display the initial menu item
         self._display_current_item()
 
+        if run_now:
+            self._execute_current_function(auto_increment)
+            if self.stop_requested:
+                self._blink_goodbye()
+                return True
+
         while True:
             pressed_buttons = self.hub.buttons.pressed()
 
@@ -207,7 +230,7 @@ class Menu:
                     self._execute_current_function(auto_increment)
                     self._wait_for_release(Button.CENTER)
                     if self.stop_requested:
-                        self.hub.display.off()
+                        self._blink_goodbye()
                         return True
 
                 elif Button.BLUETOOTH in pressed_buttons:
